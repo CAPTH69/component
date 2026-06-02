@@ -1,65 +1,283 @@
-import Image from "next/image";
+"use client";
+
+import { useState } from "react";
+import {
+  SandpackProvider,
+  SandpackLayout,
+  SandpackPreview,
+} from "@codesandbox/sandpack-react";
+
+type GenerateDebug = {
+  uiUxProMaxUsed: boolean;
+  uiUxContextPreview?: string;
+  uiUxError?: string | null;
+  error?: string;
+};
+
+type GenerateResponse = {
+  code: string;
+  debug?: GenerateDebug;
+};
+
+function ProgressWheel({
+  progress,
+  label,
+}: {
+  progress: number;
+  label: string;
+}) {
+  const rounded = Math.round(progress);
+
+  return (
+    <div
+      style={{
+        marginTop: 16,
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+      }}
+    >
+      <div
+        style={{
+          width: 58,
+          height: 58,
+          borderRadius: "50%",
+          background: `conic-gradient(#22c55e ${
+            rounded * 3.6
+          }deg, #1f2937 0deg)`,
+          display: "grid",
+          placeItems: "center",
+        }}
+      >
+        <div
+          style={{
+            width: 46,
+            height: 46,
+            borderRadius: "50%",
+            background: "#020617",
+            color: "white",
+            display: "grid",
+            placeItems: "center",
+            fontSize: 12,
+            fontWeight: 700,
+          }}
+        >
+          {rounded}%
+        </div>
+      </div>
+
+      <div>
+        <div style={{ color: "white", fontWeight: 600 }}>{label}</div>
+        <div style={{ color: "#94a3b8", fontSize: 13 }}>
+          Generating your widget...
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function Home() {
+  const [text, setText] = useState("");
+  const [result, setResult] = useState("");
+  const [debug, setDebug] = useState<GenerateDebug | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [stage, setStage] = useState("");
+  const [error, setError] = useState("");
+
+  async function handleClick() {
+    if (!text.trim()) return;
+
+    setLoading(true);
+    setProgress(5);
+    setStage("Preparing request");
+    setError("");
+    setResult("");
+    setDebug(null);
+
+    const timer = window.setInterval(() => {
+      setProgress((current) => {
+        if (current < 25) {
+          setStage("Applying UI/UX Pro Max");
+          return current + 3;
+        }
+
+        if (current < 70) {
+          setStage("Generating React widget");
+          return current + 1.5;
+        }
+
+        if (current < 90) {
+          setStage("Preparing preview");
+          return current + 0.5;
+        }
+
+        return current;
+      });
+    }, 300);
+
+    try {
+      const response = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ description: text }),
+      });
+
+      const data = (await response.json()) as GenerateResponse;
+
+      if (!response.ok) {
+        throw new Error(data.debug?.error || "Failed to generate component.");
+      }
+
+      setProgress(100);
+      setStage("Preview ready");
+
+      setResult(data.code);
+      setDebug(data.debug ?? null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      window.clearInterval(timer);
+
+      setTimeout(() => {
+        setLoading(false);
+        setProgress(0);
+        setStage("");
+      }, 700);
+    }
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div
+      style={{
+        minHeight: "100vh",
+        padding: 40,
+        background: "#020617",
+        color: "white",
+      }}
+    >
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="Describe a widget, e.g. sign in page, navbar, pricing card..."
+        rows={4}
+        style={{
+          width: "100%",
+          padding: 12,
+          borderRadius: 10,
+          border: "1px solid #334155",
+          background: "#0f172a",
+          color: "white",
+          outline: "none",
+          resize: "vertical",
+        }}
+      />
+
+      <button
+        onClick={handleClick}
+        disabled={loading || !text.trim()}
+        style={{
+          marginTop: 12,
+          padding: "10px 18px",
+          borderRadius: 10,
+          border: "none",
+          background: loading || !text.trim() ? "#334155" : "#2563eb",
+          color: "white",
+          cursor: loading || !text.trim() ? "not-allowed" : "pointer",
+          fontWeight: 600,
+        }}
+      >
+        {loading ? "Generating..." : "Generate"}
+      </button>
+
+      {loading && <ProgressWheel progress={progress} label={stage} />}
+
+      {error && (
+        <div
+          style={{
+            marginTop: 12,
+            padding: 12,
+            borderRadius: 8,
+            background: "#450a0a",
+            color: "#fecaca",
+            fontSize: 13,
+          }}
+        >
+          {error}
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      )}
+
+      {debug && (
+        <div
+          style={{
+            marginTop: 12,
+            padding: 12,
+            borderRadius: 8,
+            background: debug.uiUxProMaxUsed ? "#052e16" : "#450a0a",
+            color: "white",
+            fontSize: 13,
+          }}
+        >
+          <strong>
+            UI/UX Pro Max used: {debug.uiUxProMaxUsed ? "YES" : "NO"}
+          </strong>
+
+          {debug.uiUxError && (
+            <p style={{ marginTop: 8, color: "#fecaca" }}>
+              Error: {debug.uiUxError}
+            </p>
+          )}
+
+          {debug.uiUxContextPreview && (
+            <details style={{ marginTop: 8 }}>
+              <summary style={{ cursor: "pointer", color: "#bbf7d0" }}>
+                View UI/UX Pro Max context
+              </summary>
+
+              <pre
+                style={{
+                  marginTop: 8,
+                  whiteSpace: "pre-wrap",
+                  color: "#d1d5db",
+                  maxHeight: 180,
+                  overflow: "auto",
+                }}
+              >
+                {debug.uiUxContextPreview}
+              </pre>
+            </details>
+          )}
         </div>
-      </main>
+      )}
+
+      {result && (
+        <div
+          style={{
+            marginTop: 20,
+            borderRadius: 14,
+            overflow: "hidden",
+            border: "1px solid #334155",
+          }}
+        >
+          <SandpackProvider
+            key={result}
+            template="react"
+            files={{
+              "/App.js": {
+                code: result,
+                active: true,
+              },
+            }}
+            options={{
+              externalResources: ["https://cdn.tailwindcss.com"],
+            }}
+          >
+            <SandpackLayout>
+              <SandpackPreview style={{ height: 600 }} />
+            </SandpackLayout>
+          </SandpackProvider>
+        </div>
+      )}
     </div>
   );
 }
