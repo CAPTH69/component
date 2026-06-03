@@ -1,87 +1,23 @@
 import Replicate from "replicate";
-import { execFile } from "child_process";
-import { promisify } from "util";
-import path from "path";
-import { existsSync } from "fs";
 
 export const runtime = "nodejs";
 
 const replicate = new Replicate();
-const execFileAsync = promisify(execFile);
 
-type UiUxSkillResult = {
-  used: boolean;
-  context: string;
-  error: string | null;
-};
-
-async function runUiUxSkill(description: string): Promise<UiUxSkillResult> {
-  const scriptPath = path.join(
-    process.cwd(),
-    "skills",
-    "ui-ux-pro-max-skill",
-    "src",
-    "ui-ux-pro-max",
-    "scripts",
-    "search.py"
-  );
-
-  if (!existsSync(scriptPath)) {
-    return {
-      used: false,
-      context: "",
-      error: `Skill file not found at: ${scriptPath}`,
-    };
-  }
-
-  try {
-    const designSystem = await execFileAsync(
-      "python3",
-      [
-        scriptPath,
-        description,
-        "--design-system",
-        "-f",
-        "markdown",
-        "-p",
-        "Generated UI",
-      ],
-      {
-        timeout: 15000,
-        maxBuffer: 1024 * 1024,
-      }
-    );
-
-    const reactGuidelines = await execFileAsync(
-      "python3",
-      [scriptPath, description, "--stack", "react"],
-      {
-        timeout: 15000,
-        maxBuffer: 1024 * 1024,
-      }
-    );
-
-    const context = `
-UI/UX PRO MAX DESIGN SYSTEM:
-${designSystem.stdout}
-
-REACT-SPECIFIC UI GUIDELINES:
-${reactGuidelines.stdout}
+const tasteSkillGuidance = `
+Taste-skill generation rules:
+- The user's request is the source of truth. Use these rules only to improve visual quality; never use them to add unrelated UI.
+- Generate one focused React widget/component unless the user explicitly asks for a full page or multi-part flow.
+- Build a premium software UI: minimal, functional, sharply aligned, generous whitespace, clear hierarchy, and no generic filler.
+- Use a restrained neutral base with one accent color only. Avoid rainbow palettes, neon glows, purple-blue AI gradients, beige/brown themes, and pure black.
+- Prefer zinc/slate/neutral surfaces, subtle 1px borders, inner highlight borders, and soft tinted shadows. Use cards only when they clarify hierarchy.
+- Use modern sans typography with tight but readable hierarchy. Do not use serif styling for software UI.
+- Make forms accessible: labels above inputs, visible focus states, helper/error text where appropriate, and good contrast.
+- Add complete states when naturally relevant: hover, focus, active/tactile feedback, loading, empty, and error states. Do not add fake complex workflows.
+- Animate only with CSS transitions or Tailwind animation utilities. Animate transform and opacity, not layout dimensions.
+- Be responsive across mobile and desktop. Use stable grids and avoid fragile width math.
+- Avoid AI tells: no generic avatar placeholders, no predictable fake numbers, no startup-slop names, no filler copy, no emojis.
 `.trim();
-
-    return {
-      used: context.length > 0,
-      context,
-      error: null,
-    };
-  } catch (error) {
-    return {
-      used: false,
-      context: "",
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
-}
 
 function cleanGeneratedCode(raw: unknown): string {
   const code = Array.isArray(raw) ? raw.join("") : String(raw);
@@ -102,7 +38,6 @@ export async function POST(request: Request) {
         {
           code: "",
           debug: {
-            uiUxProMaxUsed: false,
             error: "Description is empty.",
           },
         },
@@ -110,37 +45,17 @@ export async function POST(request: Request) {
       );
     }
 
-    const widgetBrief = `
-Create exactly one isolated UI widget/component for this request:
-${description}
-
-Do not create a landing page, storytelling flow, dashboard, multi-section page, progress chapter UI, onboarding journey, or extra content unless the user explicitly asks for it.
-`.trim();
-
-    const uiUxResult = await runUiUxSkill(widgetBrief);
-
-    console.log("UI/UX Pro Max used:", uiUxResult.used);
-    console.log("UI/UX Pro Max error:", uiUxResult.error);
-    console.log("UI/UX Pro Max preview:", uiUxResult.context.slice(0, 500));
-
     const input = {
       prompt: `
 You are a strict React widget generator.
 
 MOST IMPORTANT RULE:
 The user's request is the source of truth.
-UI/UX Pro Max is only for visual styling guidance.
-Do not use UI/UX Pro Max to add extra sections, stories, dashboards, progress panels, onboarding journeys, chapter lists, analytics panels, or unrelated UI.
+Taste-skill guidance is only for visual quality and interaction quality.
+Do not use taste-skill guidance to add extra sections, stories, dashboards, progress panels, onboarding journeys, chapter lists, analytics panels, sidebars, or unrelated UI.
 
-UI/UX PRO MAX STATUS:
-${
-  uiUxResult.used
-    ? "Successfully loaded and applied for styling only."
-    : "Not loaded. Use best-practice UI styling."
-}
-
-UI/UX PRO MAX CONTEXT:
-${uiUxResult.context}
+TASTE-SKILL GUIDANCE:
+${tasteSkillGuidance}
 
 USER REQUEST:
 ${description}
@@ -161,12 +76,13 @@ Code rules:
 - Name the component "App".
 - Export it exactly as: export default function App()
 - Use React only.
-- Use Tailwind CSS classes only for styling.
+- Use Tailwind CSS classes only for styling. The component runs in Sandpack with Tailwind CDN, so do not rely on custom project CSS or Tailwind config.
 - Do not import external libraries except React.
 - Do not use shadcn, lucide-react, framer-motion, recharts, radix, or other packages.
 - Use inline SVG icons only if needed.
+- Do not use TypeScript syntax or type annotations.
 - Make it responsive.
-- Add polished spacing, typography, hover states, focus states, rounded corners, and shadows.
+- Add polished spacing, typography, hover states, focus states, rounded corners, and subtle shadows.
 - Avoid default browser-looking UI.
 - Return only valid React code.
 - No markdown.
@@ -182,18 +98,12 @@ Code rules:
 
     return Response.json({
       code,
-      debug: {
-        uiUxProMaxUsed: uiUxResult.used,
-        uiUxContextPreview: uiUxResult.context.slice(0, 1200),
-        uiUxError: uiUxResult.error,
-      },
     });
   } catch (error) {
     return Response.json(
       {
         code: "",
         debug: {
-          uiUxProMaxUsed: false,
           error: error instanceof Error ? error.message : String(error),
         },
       },
