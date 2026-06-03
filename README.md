@@ -20,14 +20,9 @@ and Shyc generates the React + Tailwind code and renders it live in the browser.
 3. The code is cleaned and rendered live using Sandpack, with Tailwind loaded into the preview.
 
 ## Running locally
-\`\`\`
-npm install
-npm run dev
-\`\`\`
-Add your Replicate API token to \`.env.local\`:
-\`\`\`
+Run `npm install`, then `npm run dev`, and open localhost:3000 in your browser.
+Add your Replicate API token to a `.env.local` file:
 REPLICATE_API_TOKEN=your_token_here
-\`\`\`
 
 ## Roadmap
 - [ ] Self-improving generation: the AI judges its own output and iterates until the design holds up
